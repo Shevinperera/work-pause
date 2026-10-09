@@ -169,7 +169,9 @@ async function saveShiftToFirestore() {
   const shiftId = `${currentUser.uid}_${todayStr}`;
   try {
     await setDoc(doc(db, "shifts", shiftId), todayData);
+    historyCache[todayStr] = todayData;
     updateEmployeeUI();
+    renderHistoryTableUI();
   } catch (err) {
     console.error("Error saving shift", err);
   }
@@ -238,12 +240,6 @@ async function renderHistoryTable() {
   if (!currentUser || currentProfile.role !== 'employee') return;
 
   document.getElementById('monthLabel').textContent = currentViewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  
-  const y = currentViewMonth.getFullYear();
-  const m = currentViewMonth.getMonth();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const todayStr = getTodayString();
-  
   const tbody = document.getElementById('historyBody');
   tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading data from cloud...</td></tr>';
   
@@ -256,12 +252,26 @@ async function renderHistoryTable() {
   });
   historyCache = userHistory;
 
+  renderHistoryTableUI();
+}
+
+function renderHistoryTableUI() {
+  if (!currentUser || currentProfile.role !== 'employee') return;
+  
+  const y = currentViewMonth.getFullYear();
+  const m = currentViewMonth.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const todayStr = getTodayString();
+  const tbody = document.getElementById('historyBody');
+  
+  document.getElementById('monthLabel').textContent = currentViewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   tbody.innerHTML = '';
   let hasData = false;
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const data = userHistory[dateStr];
+    const data = historyCache[dateStr];
     
     if (data && data.inTime) {
       hasData = true;
@@ -466,10 +476,7 @@ setInterval(() => {
         
         // Update history table live row if it's currently rendered
         if (historyCache[todayStr] && !historyCache[todayStr].outTime) {
-             const tbody = document.getElementById('historyBody');
-             // Simplest way is just triggering a quick refresh of the DOM part or full re-render
-             // For performance on small apps, full re-render is okay, but we'll leave it as is 
-             // since they can see the main big live timer.
+             renderHistoryTableUI();
         }
       }
     } else if (currentProfile.role === 'admin') {
