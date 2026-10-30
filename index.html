@@ -16,7 +16,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -69,28 +69,61 @@
 
     <!-- LOGIN VIEW -->
     <section id="loginView" class="login hidden" aria-labelledby="loginTitle">
-      <form id="loginForm" class="login-form" novalidate>
-        <h1 id="loginTitle" class="title">Sign in</h1>
-        <p class="muted">Use the work account your administrator set up for you.</p>
-
-        <div id="loginError" class="alert alert-error hidden" role="alert">
-          <svg class="icon" aria-hidden="true"><use href="#i-circle-alert"/></svg>
-          <span id="loginErrorText"></span>
+      <!-- Verse of the day. verse.js picks today's verse (Asia/Colombo date);
+           the date line is kept live by the existing .current-date updater. -->
+      <aside class="login-verse is-fresh" data-daily-verse data-size="short" aria-labelledby="verseKicker">
+        <div class="verse-head">
+          <span class="verse-kicker" id="verseKicker">Verse of the day</span>
+          <span class="verse-date current-date">&nbsp;</span>
         </div>
 
-        <div class="field">
-          <label for="emailInput">Email</label>
-          <input type="email" id="emailInput" class="input" autocomplete="username" required>
+        <figure class="verse-body">
+          <span class="verse-mark" aria-hidden="true">&ldquo;</span>
+          <blockquote class="verse-text" data-verse-text>And whatsoever ye do, do it heartily, as to the Lord, and not unto men.</blockquote>
+          <figcaption class="verse-ref">
+            <span class="verse-rule" aria-hidden="true"></span>
+            <cite data-verse-ref>Colossians 3:23</cite>
+          </figcaption>
+        </figure>
+
+        <div class="verse-foot">
+          <span>King James Version</span>
+          <span>New verse daily at midnight</span>
         </div>
-        <div class="field">
-          <label for="passwordInput">Password</label>
-          <input type="password" id="passwordInput" class="input" autocomplete="current-password" required>
-        </div>
-        <button id="loginBtn" class="btn btn-primary btn-block" type="submit">
-          <svg class="icon" aria-hidden="true"><use href="#i-log-in"/></svg>
-          <span class="btn-label">Sign in</span>
-        </button>
-      </form>
+      </aside>
+
+      <div class="login-main">
+        <form id="loginForm" class="login-form" novalidate>
+          <div class="login-heading">
+            <span class="login-eyebrow">Work Hours</span>
+            <h1 id="loginTitle" class="title">Sign in</h1>
+            <p class="muted">Use the work account your administrator set up for you.</p>
+          </div>
+
+          <div id="loginError" class="alert alert-error hidden" role="alert">
+            <svg class="icon" aria-hidden="true"><use href="#i-circle-alert"/></svg>
+            <span id="loginErrorText"></span>
+          </div>
+
+          <div class="field">
+            <label for="emailInput">Email</label>
+            <input type="email" id="emailInput" class="input" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label for="passwordInput">Password</label>
+            <input type="password" id="passwordInput" class="input" autocomplete="current-password" required>
+          </div>
+          <button id="loginBtn" class="btn btn-primary btn-block" type="submit">
+            <svg class="icon" aria-hidden="true"><use href="#i-log-in"/></svg>
+            <span class="btn-label">Sign in</span>
+          </button>
+        </form>
+
+        <ul class="login-notes">
+          <li>Forgot your password? Ask your administrator to reset it.</li>
+          <li>Times are recorded in Asia/Colombo (UTC+05:30).</li>
+        </ul>
+      </div>
     </section>
 
     <!-- ADMIN VIEW -->
@@ -254,5 +287,6 @@
   </main>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="verse.js"></script>
 </body>
 </html>

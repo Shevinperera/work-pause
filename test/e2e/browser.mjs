@@ -10,6 +10,7 @@ import XLSX from 'xlsx';
 import { mkdirSync, readdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verseForDate, colomboDateKey } from '../../verse.js';
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:8787';
 const API_KEY = 'AIzaSyAhlILJWDXk7SNUXW30Yz_aOskYNXD2gYk';
@@ -23,7 +24,7 @@ const CHROME = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Ap
 // { "E2E_ADMIN_EMAIL": "...", "E2E_ADMIN_PASS": "...", "E2E_EMP_EMAIL": "...", ... }
 const credFile = fileURLToPath(new URL('./credentials.json', import.meta.url));
 const env = { ...(existsSync(credFile) ? JSON.parse(readFileSync(credFile, 'utf8')) : {}), ...process.env };
-const haveCreds = env.E2E_ADMIN_EMAIL && env.E2E_EMP_EMAIL && env.E2E_EMP2_EMAIL;
+const haveCreds = env.E2E_LOGIN_ONLY !== '1' && env.E2E_ADMIN_EMAIL && env.E2E_EMP_EMAIL && env.E2E_EMP2_EMAIL;
 const SKIP_CLEANUP = env.E2E_SKIP_CLEANUP === '1';
 
 rmSync(OUT, { recursive: true, force: true });
@@ -176,6 +177,7 @@ async function waitForDownload(predicate, timeout = 30000) {
     await page.waitForSelector('#loginView:not(.hidden)', { timeout: 20000 });
     expect(!(await visible(page, '#bootView')), 'boot loader still visible');
     expect(await page.$eval('#passwordInput', (e) => e.value) === '', 'password is pre-filled');
+    await sleep(1800); // intro animation
     await page.screenshot({ path: join(SHOTS, '01-login-desktop-light.png') });
   });
   await step('login: empty submit shows inline validation', async () => {
@@ -207,9 +209,68 @@ async function waitForDownload(predicate, timeout = 30000) {
   await step('login page on mobile (390px) has no horizontal overflow', async () => {
     await m.goto(BASE, { waitUntil: 'networkidle2' });
     await m.waitForSelector('#loginView:not(.hidden)', { timeout: 20000 });
+    await sleep(1800); // let the intro animation finish before the screenshot
     const overflow = await m.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    await m.screenshot({ path: join(SHOTS, '04-login-mobile.png') });
+    await m.screenshot({ path: join(SHOTS, '04-login-mobile.png'), fullPage: true });
     expect(overflow <= 0, `overflow ${overflow}px`);
+  });
+  await step('login page at tablet width (820px) and live date in illustration', async () => {
+    const t = await newPage();
+    await t.setViewport({ width: 820, height: 1000 });
+    await t.goto(BASE, { waitUntil: 'networkidle2' });
+    await t.waitForSelector('#loginView:not(.hidden)', { timeout: 20000 });
+    await sleep(1800);
+    const overflow = await t.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    const artDate = await t.$eval('.login-verse .current-date', (e) => e.textContent.trim());
+    await t.screenshot({ path: join(SHOTS, '05-login-tablet.png'), fullPage: true });
+    await t.__ctx.close();
+    expect(overflow <= 0, `overflow ${overflow}px`);
+    expect(/\d{4}/.test(artDate), `illustration date not filled: "${artDate}"`);
+    return artDate;
+  });
+  await step("verse panel shows today's verse (Asia/Colombo)", async () => {
+    const p = await newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle2' });
+    await p.waitForSelector('#loginView:not(.hidden)', { timeout: 20000 });
+    const expected = verseForDate(colomboDateKey());
+    const shown = await p.evaluate(() => ({
+      text: document.querySelector('[data-verse-text]').textContent.trim(),
+      ref: document.querySelector('[data-verse-ref]').textContent.trim(),
+      size: document.querySelector('[data-daily-verse]').dataset.size,
+      font: getComputedStyle(document.querySelector('[data-verse-text]')).fontFamily,
+    }));
+    await p.__ctx.close();
+    expect(shown.text === expected.text && shown.ref === expected.ref, `shown ${shown.ref}, expected ${expected.ref}`);
+    expect(/Source Serif 4/.test(shown.font), `font ${shown.font}`);
+    return `${shown.ref} (${shown.size})`;
+  });
+  await step('verse changes by itself when the page is open across midnight', async () => {
+    // Fake the page clock to 10 s before the next Colombo midnight.
+    const realNow = Date.now();
+    const tomorrow = addDays(colomboDateKey(realNow), 1);
+    const offset = (Date.parse(`${tomorrow}T00:00:00+05:30`) - 10000) - realNow;
+    const p = await newPage();
+    await p.evaluateOnNewDocument((off) => {
+      const RealDate = Date;
+      class FakeDate extends RealDate {
+        constructor(...a) { if (a.length) super(...a); else super(RealDate.now() + off); }
+        static now() { return RealDate.now() + off; }
+      }
+      window.Date = FakeDate;
+    }, offset);
+    await p.goto(BASE, { waitUntil: 'networkidle2' });
+    await p.waitForSelector('#loginView:not(.hidden)', { timeout: 20000 });
+    const before = await p.$eval('[data-verse-ref]', (e) => e.textContent.trim());
+    const today = verseForDate(addDays(tomorrow, -1)).ref;
+    const next = verseForDate(tomorrow).ref;
+    expect(before === today, `before midnight showed ${before}, expected ${today}`);
+    await p.waitForFunction((r) => document.querySelector('[data-verse-ref]').textContent.trim() === r, { timeout: 75000 }, next);
+    await sleep(1500); // let the entrance animation finish
+    const vis = await p.evaluate(() => ['.verse-mark', '.verse-text', '.verse-ref'].map((s) => getComputedStyle(document.querySelector(s)).opacity));
+    await p.screenshot({ path: join(SHOTS, '06-login-after-midnight.png') });
+    await p.__ctx.close();
+    expect(vis.every((o) => o === '1'), `new verse not fully visible after rollover, opacity ${vis}`);
+    return `${before} -> ${next}`;
   });
   await page.__ctx.close();
   await m.__ctx.close();

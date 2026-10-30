@@ -229,13 +229,155 @@ button, input, select { font: inherit; color: inherit; }
   justify-content: center;
 }
 
+/* ---- Sign-in page --------------------------------------------------------- */
 .login {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--s7);
+  max-width: 960px;
+  margin: var(--s6) auto 0;
+}
+
+.login-main {
+  width: 100%;
   max-width: 360px;
-  margin: var(--s7) auto 0;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .login-form { display: flex; flex-direction: column; gap: var(--s4); }
-.login-form .muted { margin-top: calc(var(--s3) * -1); }
+.login-heading { display: flex; flex-direction: column; gap: var(--s1); margin-bottom: var(--s1); }
+.login-eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.login-heading .title { font-size: var(--fs-2xl); letter-spacing: -0.02em; }
+
+.login-notes {
+  list-style: none;
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* Verse of the day. Uses its own fixed dark palette in both themes. */
+.login-verse {
+  --verse-bg: #141413;
+  --verse-line: #2b2a28;
+  --verse-text: #f1efe9;
+  --verse-muted: #9d978f;
+  --verse-accent: #2dd4bf;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s6);
+  min-height: 480px;
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--verse-line);
+  color: var(--verse-text);
+  background-color: var(--verse-bg);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-position: -9px -9px;
+  overflow: hidden;
+}
+
+.verse-head { display: flex; flex-direction: column; gap: var(--s1); }
+.verse-kicker {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--verse-accent);
+}
+.verse-date { font-size: var(--fs-sm); color: var(--verse-muted); }
+
+.verse-body { position: relative; margin: 0; }
+.verse-mark {
+  display: block;
+  height: 0.5em;
+  margin-bottom: var(--s3);
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  font-size: 96px;
+  line-height: 0.9;
+  color: var(--verse-accent);
+  user-select: none;
+}
+.verse-text {
+  margin: 0;
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  color: var(--verse-text);
+  text-wrap: pretty;
+}
+.login-verse[data-size="medium"] .verse-text { font-size: 25px; line-height: 1.4; }
+.login-verse[data-size="long"] .verse-text { font-size: 21px; line-height: 1.45; }
+
+.verse-ref {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s5);
+}
+.verse-rule { width: 24px; height: 1px; background: var(--verse-accent); }
+.verse-ref cite {
+  font-style: normal;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.verse-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--verse-line);
+  font-size: var(--fs-xs);
+  color: var(--verse-muted);
+}
+
+/* Entrance: the verse settles in on load and when the day changes. */
+.login-verse.is-fresh .verse-mark { animation: verse-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.05s both; }
+.login-verse.is-fresh .verse-text { animation: verse-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both; }
+.login-verse.is-fresh .verse-ref { animation: verse-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.45s both; }
+@keyframes verse-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-verse.is-fresh .verse-mark,
+  .login-verse.is-fresh .verse-text,
+  .login-verse.is-fresh .verse-ref { animation: none; }
+}
+
+@media (max-width: 860px) {
+  .login { grid-template-columns: minmax(0, 1fr); gap: var(--s6); max-width: 420px; margin-top: var(--s4); }
+  .login-main { order: -1; max-width: none; }
+  .login-verse { min-height: 0; gap: var(--s5); padding: var(--s5); }
+  .verse-mark { font-size: 72px; margin-bottom: var(--s2); }
+  .verse-text { font-size: 22px; }
+  .login-verse[data-size="medium"] .verse-text { font-size: 20px; }
+  .login-verse[data-size="long"] .verse-text { font-size: 18px; }
+  .verse-foot { flex-direction: column; gap: 2px; }
+}
 
 /* ==========================================================================
    Controls
