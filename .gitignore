@@ -1,0 +1,6 @@
+node_modules/
+.wrangler/
+.dev.vars
+test/output/
+test/e2e/credentials.json
+
