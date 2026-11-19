@@ -75,9 +75,9 @@ test('Alice sheet: multi-break day, missing values, timezone', () => {
   assert.deepEqual(forDate('2026-10-27')[0], ['2026-10-27', '09:00', 'Missing', '12:00', '12:30', '0:30', 'Missing']);
   assert.deepEqual(forDate('2026-10-26')[0], ['2026-10-26', '09:00', '18:00', '13:00', 'Missing', 'Missing', 'Missing']);
   assert.deepEqual(forDate('2026-10-30')[0], ['2026-10-30', '09:00', 'In progress', '12:30', 'In progress', 'In progress', 'In progress']);
-  // stored as 2026-10-24 (US browser) but 01:30 on the 25th in Colombo
-  assert.deepEqual(forDate('2026-10-25')[0], ['2026-10-25', '01:30', '03:30', '', '', '0:00', '2:00']);
-  assert.equal(forDate('2026-10-24')[0][1], 'No activity');
+  // 01:30 on the 25th in Colombo falls in the 2026-10-24 shift day (07:00 -> 07:00)
+  assert.deepEqual(forDate('2026-10-24')[0], ['2026-10-24', '01:30', '03:30', '', '', '0:00', '2:00']);
+  assert.equal(forDate('2026-10-25')[0][1], 'No activity');
   assert.equal(forDate('2026-10-01')[0][1], 'No activity');
 
   const total = r.find((x) => x[0] === 'Total (complete days)');

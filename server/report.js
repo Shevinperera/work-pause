@@ -4,6 +4,8 @@
 
 export const TIMEZONE = 'Asia/Colombo';
 export const DAY_MS = 86400000;
+export const SHIFT_START_HOUR = 7;
+export const SHIFT_OFFSET_MS = SHIFT_START_HOUR * 3600000;
 
 const partsFormatter = new Intl.DateTimeFormat('en-GB', {
   timeZone: TIMEZONE,
@@ -27,6 +29,11 @@ export function dateKey(ms) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+/** 'YYYY-MM-DD' shift-day key (07:00 -> next day 07:00 in TIMEZONE). */
+export function shiftDateKey(ms) {
+  return dateKey(ms - SHIFT_OFFSET_MS);
+}
+
 /** 'HH:mm' (24h) of an epoch-ms instant, in TIMEZONE. */
 export function timeHHmm(ms) {
   const p = zonedParts(ms);
@@ -40,9 +47,9 @@ export function addDays(key, n) {
   return t.toISOString().slice(0, 10);
 }
 
-/** Last `days` calendar days in TIMEZONE, ending today (inclusive). */
+/** Last `days` shift days (07:00 -> 07:00 in TIMEZONE), ending on the current shift day (inclusive). */
 export function reportPeriod(nowMs, days = 30) {
-  const end = dateKey(nowMs);
+  const end = shiftDateKey(nowMs);
   const start = addDays(end, -(days - 1));
   const dates = [];
   for (let i = 0; i < days; i++) dates.push(addDays(start, i));
@@ -132,14 +139,14 @@ function evaluateShift(shift, isToday) {
  */
 export function buildPersonReport(user, shifts, period) {
   const joinMs = toMillis(user.createdAt);
-  const joinKey = joinMs ? dateKey(joinMs) : null;
+  const joinKey = joinMs ? shiftDateKey(joinMs) : null;
 
-  // Bucket by the TIMEZONE date of clock-in (falls back to the stored date key).
+  // Bucket by the TIMEZONE shift-day (07:00 -> 07:00) of clock-in.
   const byDate = new Map();
   for (const s of shifts) {
     const inMs = toMillis(s.inTime);
     if (!inMs) continue; // a doc without a clock-in carries no attendance
-    const key = dateKey(inMs);
+    const key = shiftDateKey(inMs);
     if (!byDate.has(key)) byDate.set(key, []);
     byDate.get(key).push(s);
   }
