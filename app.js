@@ -18,6 +18,9 @@ const db = getFirestore(app);
 const THEME_KEY = 'workHoursTheme';
 // All dates and times in the app (and in the Excel export) use this zone.
 const TIMEZONE = 'Asia/Colombo';
+// A workday runs 07:00 -> next day 07:00 in TIMEZONE.
+const SHIFT_START_HOUR = 7;
+const SHIFT_OFFSET_MS = SHIFT_START_HOUR * 3600000;
 
 let currentUser = null;
 let currentProfile = null; // { name, role }
@@ -56,8 +59,12 @@ const timeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TIMEZONE, hour: '2-
 const clockFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 const longDateFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TIMEZONE, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
+function getShiftDateString(ms = Date.now()) {
+  return dateKeyFmt.format(new Date(ms - SHIFT_OFFSET_MS)); // YYYY-MM-DD in Asia/Colombo (07:00 -> 07:00)
+}
+
 function getTodayString() {
-  return dateKeyFmt.format(new Date()); // YYYY-MM-DD in Asia/Colombo
+  return getShiftDateString();
 }
 
 function formatTime(ms) {
@@ -393,7 +400,9 @@ async function renderHistoryTable() {
     const snap = await getDocs(qShifts);
     const userHistory = {};
     snap.forEach((d) => {
-      userHistory[d.data().date] = d.data();
+      const data = d.data();
+      const key = data.inTime ? getShiftDateString(data.inTime) : data.date;
+      userHistory[key] = data;
     });
     historyCache = userHistory;
   } catch (err) {

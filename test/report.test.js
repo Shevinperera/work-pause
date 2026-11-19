@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAttendanceReport, reportPeriod, dateKey, timeHHmm } from '../server/report.js';
+import { buildAttendanceReport, reportPeriod, dateKey, shiftDateKey, timeHHmm } from '../server/report.js';
 import { users, shifts, NOW, at } from './fixtures.js';
 
 const H = 3600000;
@@ -18,13 +18,15 @@ test('runs independent of the machine timezone', () => {
   assert.equal(timeHHmm(at('2026-10-28', '09:05')), '09:05');
 });
 
-test('period is the last 30 Colombo days including today', () => {
+test('period is the last 30 Colombo shift days (07:00 -> 07:00) including today', () => {
   const p = reportPeriod(NOW);
   assert.equal(p.start, '2026-10-01');
   assert.equal(p.end, '2026-10-30');
   assert.equal(p.dates.length, 30);
-  // 23:00 UTC on Oct 30 is already Oct 31 in Colombo
-  assert.equal(reportPeriod(Date.parse('2026-10-30T23:00:00Z')).end, '2026-10-31');
+  // 23:00 UTC on Oct 30 is 04:30 on Oct 31 in Colombo, still in the Oct 30 shift day
+  assert.equal(reportPeriod(Date.parse('2026-10-30T23:00:00Z')).end, '2026-10-30');
+  // 01:30 UTC on Oct 31 is 07:00 in Colombo, which starts the Oct 31 shift day
+  assert.equal(reportPeriod(Date.parse('2026-10-31T01:30:00Z')).end, '2026-10-31');
 });
 
 test('several breaks in a day: each listed, day total and worked hours correct', () => {
@@ -58,9 +60,9 @@ test('today in progress is marked in-progress, not missing', () => {
   assert.equal(s.inProgress, true);
 });
 
-test('shift is bucketed by Colombo date, not the stored browser date', () => {
-  assert.equal(day('alice', '2026-10-24').kind, 'no-activity');
-  const s = day('alice', '2026-10-25').shifts[0];
+test('shift is bucketed by Colombo shift-day (07:00 -> 07:00), not the stored browser date', () => {
+  assert.equal(day('alice', '2026-10-25').kind, 'no-activity');
+  const s = day('alice', '2026-10-24').shifts[0];
   assert.equal(timeHHmm(s.inTime), '01:30');
   assert.equal(s.workedMs, 2 * H);
 });
@@ -127,5 +129,41 @@ test('corrupt data does not crash and is flagged', () => {
   assert.equal(d('2026-10-12').kind, 'no-activity');
   assert.equal(d('2026-10-13').shifts[0].workedMs, H);
   assert.equal(r.people[0].summary.totalWorkedMs, H);
+});
+
+test('shift day runs 07:00 -> 07:00 Colombo and handles overnight shifts', () => {
+  assert.equal(shiftDateKey(at('2026-10-29', '06:59')), '2026-10-28');
+  assert.equal(shiftDateKey(at('2026-10-29', '07:00')), '2026-10-29');
+
+  const r = buildAttendanceReport(
+    [{ uid: 'night', name: 'Night Owl' }],
+    [
+      {
+        uid: 'night',
+        date: '2026-10-28',
+        inTime: at('2026-10-28', '22:00'),
+        outTime: at('2026-10-29', '04:30'),
+        breaks: [{ start: at('2026-10-29', '01:00'), end: at('2026-10-29', '01:30') }],
+      },
+      {
+        uid: 'night',
+        // Legacy log stored with calendar date Oct 29 for a 02:00 AM clock-in
+        date: '2026-10-29',
+        inTime: at('2026-10-27', '02:00'),
+        outTime: at('2026-10-27', '06:00'),
+        breaks: [],
+      },
+    ],
+    NOW,
+  );
+  const d = (k) => r.people[0].days.find((x) => x.date === k);
+  assert.equal(d('2026-10-28').kind, 'worked');
+  assert.equal(d('2026-10-28').shifts[0].workedMs, 6 * H);
+  assert.equal(d('2026-10-28').shifts[0].breakTotalMs, 30 * M);
+  // 02:00 AM on Oct 27 is bucketed into the Oct 26 shift day
+  assert.equal(d('2026-10-26').kind, 'worked');
+  assert.equal(d('2026-10-26').shifts[0].workedMs, 4 * H);
+  assert.equal(r.people[0].summary.daysWorked, 2);
+  assert.equal(r.people[0].summary.totalWorkedMs, 10 * H);
 });
 
