@@ -302,6 +302,22 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+function isStandaloneApp() {
+  return (
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+    || window.navigator.standalone === true
+  );
+}
+
+function detectMobilePlatform() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    return 'ios';
+  }
+  if (/Android/i.test(ua)) return 'android';
+  return null;
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
@@ -316,16 +332,69 @@ window.addEventListener('appinstalled', () => {
 function updateInstallButton() {
   const btn = $('installAppBtn');
   if (!btn) return;
-  btn.classList.toggle('hidden', !deferredInstallPrompt);
+  const canShow = !isStandaloneApp() && (Boolean(deferredInstallPrompt) || Boolean(detectMobilePlatform()));
+  btn.classList.toggle('hidden', !canShow);
 }
 
-$('installAppBtn').addEventListener('click', async () => {
-  if (!deferredInstallPrompt) return;
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice.catch(() => {});
-  deferredInstallPrompt = null;
-  updateInstallButton();
+function openInstallHelpDialog() {
+  const dialog = $('installDialog');
+  const body = $('installDialogBody');
+  if (!dialog || !body) return;
+
+  const platform = detectMobilePlatform();
+  const insecure = location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1';
+  const httpsNote = insecure
+    ? '<p class="install-dialog-note">Note: Open the live <strong>https://</strong> address on your phone so it installs as a full app.</p>'
+    : '';
+
+  if (platform === 'ios') {
+    body.innerHTML = `
+      <p>To add <strong>Work Hours</strong> to your iPhone or iPad Home Screen:</p>
+      <ol>
+        <li>Tap the <strong>Share</strong> button in your browser bar.</li>
+        <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+        <li>Tap <strong>Add</strong> in the top-right corner.</li>
+      </ol>
+      ${httpsNote}`;
+  } else {
+    body.innerHTML = `
+      <p>To install <strong>Work Hours</strong> on your phone:</p>
+      <ol>
+        <li>Tap the <strong>⋮</strong> browser menu in the top-right corner.</li>
+        <li>Tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
+      </ol>
+      ${httpsNote}`;
+  }
+
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+function closeInstallHelpDialog() {
+  const dialog = $('installDialog');
+  if (!dialog) return;
+  if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+  else dialog.removeAttribute('open');
+}
+
+$('installDialogCloseBtn').addEventListener('click', closeInstallHelpDialog);
+$('installDialogDoneBtn').addEventListener('click', closeInstallHelpDialog);
+$('installDialog').addEventListener('click', (e) => {
+  if (e.target === $('installDialog')) closeInstallHelpDialog();
 });
+
+$('installAppBtn').addEventListener('click', async () => {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice.catch(() => {});
+    deferredInstallPrompt = null;
+    updateInstallButton();
+    return;
+  }
+  openInstallHelpDialog();
+});
+
+updateInstallButton();
 
 function getNotificationPermission() {
   if (typeof Notification === 'undefined') return 'unsupported';

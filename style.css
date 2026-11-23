@@ -159,7 +159,8 @@ button, input, select { font: inherit; color: inherit; }
 .brand-divider { width: 1px; height: 18px; background: var(--border-strong); }
 .brand-text { font-size: var(--fs-md); font-weight: 500; color: var(--text-2); white-space: nowrap; }
 
-.topbar-actions { display: flex; align-items: center; gap: var(--s2); }
+.topbar-actions { display: flex; align-items: center; gap: var(--s2); flex-shrink: 0; }
+.btn-install { height: 30px; padding: 0 10px; font-size: var(--fs-sm); }
 
 .page { padding-top: var(--s6); padding-bottom: var(--s7); }
 
@@ -523,6 +524,56 @@ button, input, select { font: inherit; color: inherit; }
   flex-shrink: 0;
 }
 
+.install-dialog {
+  width: min(400px, calc(100vw - 32px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+.install-dialog::backdrop {
+  background: rgba(15, 14, 13, 0.45);
+}
+.install-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+.install-dialog-body {
+  padding: var(--s4);
+  font-size: var(--fs-md);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.install-dialog-body p { margin: 0 0 var(--s3); }
+.install-dialog-body ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  color: var(--text);
+}
+.install-dialog-note {
+  margin-top: var(--s3) !important;
+  margin-bottom: 0 !important;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.install-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
 /* ==========================================================================
    Metrics
    ========================================================================== */
@@ -679,7 +730,10 @@ button, input, select { font: inherit; color: inherit; }
 
 @media (max-width: 640px) {
   .topbar-inner, .page { padding-left: var(--s4); padding-right: var(--s4); }
-  .brand-logo { height: 24px; }
+  .brand { gap: var(--s2); min-width: 0; }
+  .brand-logo { height: 22px; }
+  .brand-text { font-size: var(--fs-sm); }
+  .install-label-extra { display: none; }
   .page { padding-top: var(--s5); }
 
   .page-header { flex-direction: column; align-items: stretch; }
