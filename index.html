@@ -63,6 +63,10 @@
         <span class="brand-text">Post Production</span>
       </div>
       <div class="topbar-actions">
+        <button id="installAppBtn" class="btn btn-secondary btn-install hidden" type="button" title="Install Work Hours on this device">
+          <svg class="icon" aria-hidden="true"><use href="#i-app-window"/></svg>
+          <span class="btn-label">Install<span class="install-label-extra"> app</span></span>
+        </button>
         <button id="themeToggleBtn" class="btn btn-ghost btn-icon" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
           <svg class="icon" aria-hidden="true"><use id="themeIcon" href="#i-moon"/></svg>
         </button>
@@ -213,10 +217,6 @@
         </div>
         <div class="header-actions">
           <span id="empNameDisplay" class="user-name"></span>
-          <button id="installAppBtn" class="btn btn-secondary hidden" type="button" title="Install Work Hours as a desktop or phone app">
-            <svg class="icon" aria-hidden="true"><use href="#i-app-window"/></svg>
-            <span class="btn-label">Install app</span>
-          </button>
           <button id="reminderBtn" class="btn btn-secondary hidden" type="button" aria-pressed="false" title="Toggle browser clock-in popup reminders">
             <svg class="icon" aria-hidden="true"><use id="reminderBtnIcon" href="#i-bell-off"/></svg>
             <span class="btn-label" id="reminderBtnLabel">Reminders off</span>
@@ -325,6 +325,19 @@
       </div>
     </section>
   </main>
+
+  <dialog id="installDialog" class="install-dialog" aria-labelledby="installDialogTitle">
+    <div class="install-dialog-head">
+      <h2 id="installDialogTitle" class="subtitle">Install Work Hours</h2>
+      <button id="installDialogCloseBtn" class="btn btn-ghost btn-icon" type="button" aria-label="Close">
+        <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div id="installDialogBody" class="install-dialog-body"></div>
+    <div class="install-dialog-foot">
+      <button id="installDialogDoneBtn" class="btn btn-primary" type="button">Got it</button>
+    </div>
+  </dialog>
 
   <script type="module" src="app.js"></script>
   <script type="module" src="verse.js"></script>
