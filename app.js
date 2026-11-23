@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { REMINDER_PREF_KEY, REMINDER_DISMISSED_KEY, createReminderTracker, evaluateReminder, formatTabTitle } from "./reminders.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAhlILJWDXk7SNUXW30Yz_aOskYNXD2gYk",
@@ -24,10 +25,16 @@ const SHIFT_OFFSET_MS = SHIFT_START_HOUR * 3600000;
 
 let currentUser = null;
 let currentProfile = null; // { name, role }
+let authResolved = false;
 let currentViewMonth = new Date();
 let todayData = null; // Reference to today's shift
+let shiftLoaded = false;
 let unsubscribeAdmin = null; // For live updates
 let savingShift = false;
+let swRegistration = null;
+let deferredInstallPrompt = null;
+const reminderTracker = createReminderTracker();
+const activeNotifications = new Map();
 
 const $ = (id) => document.getElementById(id);
 
@@ -257,26 +264,255 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
+    authResolved = true;
     if (currentProfile.role === 'admin') {
       showView('adminView');
       $('adminNameDisplay').textContent = currentProfile.name;
+      syncTabTitle();
       startAdminLiveDashboard();
     } else {
       showView('employeeView');
       $('empNameDisplay').textContent = currentProfile.name;
       if (unsubscribeAdmin) unsubscribeAdmin();
+      updateReminderUI();
       loadEmployeeShift();
     }
   } else {
+    authResolved = true;
     currentUser = null;
     currentProfile = null;
     todayData = null;
+    shiftLoaded = false;
     historyCache = {};
     if (unsubscribeAdmin) unsubscribeAdmin();
     unsubscribeAdmin = null;
+    syncTabTitle();
     showView('loginView');
   }
 });
+
+// ---------------------------------------------------------------------------
+// PWA Install & Browser Popup Reminders
+// ---------------------------------------------------------------------------
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    swRegistration = reg;
+  }).catch((err) => {
+    console.warn('Service worker registration skipped:', err);
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updateInstallButton();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updateInstallButton();
+});
+
+function updateInstallButton() {
+  const btn = $('installAppBtn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !deferredInstallPrompt);
+}
+
+$('installAppBtn').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice.catch(() => {});
+  deferredInstallPrompt = null;
+  updateInstallButton();
+});
+
+function getNotificationPermission() {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  return Notification.permission;
+}
+
+function areRemindersEnabled() {
+  return localStorage.getItem(REMINDER_PREF_KEY) === 'on' && getNotificationPermission() === 'granted';
+}
+
+let reminderNoticeTimer = null;
+function showReminderNotice(kind, message, autoHideMs = 8000) {
+  const box = $('reminderNotice');
+  if (!box) return;
+  clearTimeout(reminderNoticeTimer);
+  if (!message) {
+    box.classList.add('hidden');
+    return;
+  }
+  box.className = `alert ${kind === 'error' ? 'alert-error' : 'alert-success'}`;
+  $('reminderNoticeIcon').setAttribute('href', kind === 'error' ? '#i-circle-alert' : '#i-circle-check');
+  $('reminderNoticeText').textContent = message;
+  if (autoHideMs > 0) {
+    reminderNoticeTimer = setTimeout(() => box.classList.add('hidden'), autoHideMs);
+  }
+}
+
+function updateReminderUI() {
+  const perm = getNotificationPermission();
+  const btn = $('reminderBtn');
+  const banner = $('reminderBanner');
+  if (!btn || !banner) return;
+
+  if (perm === 'unsupported') {
+    btn.classList.add('hidden');
+    banner.classList.add('hidden');
+    return;
+  }
+
+  btn.classList.remove('hidden');
+  const enabled = areRemindersEnabled();
+  btn.classList.toggle('is-active', enabled);
+  btn.setAttribute('aria-pressed', String(enabled));
+  $('reminderBtnIcon').setAttribute('href', enabled ? '#i-bell' : '#i-bell-off');
+  $('reminderBtnLabel').textContent = enabled ? 'Reminders on' : 'Enable reminders';
+
+  const dismissed = localStorage.getItem(REMINDER_DISMISSED_KEY) === '1';
+  banner.classList.toggle('hidden', enabled || dismissed);
+}
+
+async function showPopupNotification({ tag, title, body }) {
+  const options = {
+    body,
+    tag,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    renotify: true,
+  };
+  try {
+    if (swRegistration && typeof swRegistration.showNotification === 'function') {
+      await swRegistration.showNotification(title, options);
+      return;
+    }
+  } catch (_) {
+    // Fall back to the page Notification constructor below.
+  }
+  try {
+    const prev = activeNotifications.get(tag);
+    if (prev) prev.close();
+    const n = new Notification(title, options);
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+    activeNotifications.set(tag, n);
+  } catch (err) {
+    console.warn('Notification failed:', err);
+  }
+}
+
+function closePopupNotifications(tags) {
+  for (const tag of tags) {
+    const n = activeNotifications.get(tag);
+    if (n) {
+      n.close();
+      activeNotifications.delete(tag);
+    }
+    if (swRegistration && typeof swRegistration.getNotifications === 'function') {
+      swRegistration.getNotifications({ tag }).then((list) => {
+        list.forEach((item) => item.close());
+      }).catch(() => {});
+    }
+  }
+}
+
+async function enableReminders() {
+  const perm = getNotificationPermission();
+  if (perm === 'unsupported') return;
+
+  let result = perm;
+  if (perm === 'default') {
+    result = await Notification.requestPermission();
+  }
+
+  if (result === 'denied') {
+    localStorage.setItem(REMINDER_PREF_KEY, 'off');
+    updateReminderUI();
+    showReminderNotice(
+      'error',
+      'Notifications are blocked for this site. Click the site settings icon in your address bar, allow Notifications, and try again.',
+      0,
+    );
+    return;
+  }
+
+  if (result === 'granted') {
+    localStorage.setItem(REMINDER_PREF_KEY, 'on');
+    updateReminderUI();
+    showReminderNotice(
+      'success',
+      'Popup reminders enabled. Right-click this tab and choose Pin (or click Install app) so it opens automatically when you start your browser.',
+      10000,
+    );
+    await showPopupNotification({
+      tag: 'work-hours-welcome',
+      title: 'Work Hours reminders enabled',
+      body: "You'll get a popup reminder whenever you open your browser and haven't clocked in yet.",
+    });
+  }
+}
+
+function toggleReminders() {
+  if (areRemindersEnabled()) {
+    localStorage.setItem(REMINDER_PREF_KEY, 'off');
+    closePopupNotifications(['work-hours-punch-in', 'work-hours-break', 'work-hours-punch-out']);
+    updateReminderUI();
+    showReminderNotice('success', 'Popup reminders turned off.', 4000);
+  } else {
+    enableReminders();
+  }
+}
+
+$('reminderBtn').addEventListener('click', toggleReminders);
+$('reminderBannerEnableBtn').addEventListener('click', enableReminders);
+$('reminderBannerDismissBtn').addEventListener('click', () => {
+  localStorage.setItem(REMINDER_DISMISSED_KEY, '1');
+  updateReminderUI();
+});
+
+function syncTabTitle() {
+  if (currentUser && currentProfile && currentProfile.role !== 'admin' && shiftLoaded && todayData) {
+    const next = formatTabTitle(shiftStatus(todayData));
+    if (document.title !== next) document.title = next;
+  } else {
+    const def = formatTabTitle(null);
+    if (document.title !== def) document.title = def;
+  }
+}
+
+function checkReminders() {
+  if (!authResolved) return;
+  const isEmployee = Boolean(currentUser && currentProfile && currentProfile.role !== 'admin');
+  const status = isEmployee && shiftLoaded && todayData ? shiftStatus(todayData) : null;
+  const openBreak = isEmployee && todayData && Array.isArray(todayData.breaks)
+    ? todayData.breaks.find((b) => b && b.start && !b.end)
+    : null;
+
+  const { notify, closeTags } = evaluateReminder(
+    reminderTracker,
+    {
+      enabled: localStorage.getItem(REMINDER_PREF_KEY) === 'on',
+      permission: getNotificationPermission(),
+      role: currentProfile ? currentProfile.role : null,
+      signedOut: !currentUser,
+      shiftLoaded,
+      shiftDate: getTodayString(),
+      status,
+      openBreakStartMs: openBreak ? openBreak.start : null,
+      workMs: isEmployee && todayData ? calculateWorkMs(todayData) : 0,
+      hidden: document.hidden,
+    },
+    Date.now(),
+  );
+
+  if (closeTags.length) closePopupNotifications(closeTags);
+  if (notify) showPopupNotification(notify);
+}
 
 // ---------------------------------------------------------------------------
 // Employee
@@ -285,16 +521,19 @@ async function loadEmployeeShift() {
   if (!currentUser) return;
   const todayStr = getTodayString();
   const shiftId = `${currentUser.uid}_${todayStr}`;
+  shiftLoaded = false;
   setActionButtonsLoading();
   try {
     const shiftSnap = await getDoc(doc(db, "shifts", shiftId));
     todayData = shiftSnap.exists()
       ? shiftSnap.data()
       : { inTime: null, outTime: null, breaks: [], uid: currentUser.uid, date: todayStr };
+    shiftLoaded = true;
     showAlert('shiftError', 'shiftErrorText', '');
   } catch (err) {
     console.error('Error loading shift', err);
     todayData = null;
+    shiftLoaded = false;
     showAlert('shiftError', 'shiftErrorText', "Couldn't load today's shift. Check your connection and reload the page.");
   }
   updateEmployeeUI();
@@ -384,6 +623,8 @@ function updateEmployeeUI() {
   $('todayIn').textContent = todayData.inTime ? formatTime(todayData.inTime) : '–';
   $('todayWork').textContent = formatDuration(calculateWorkMs(todayData));
   $('todayBreak').textContent = formatDuration(calculateBreakTotalMs(todayData.breaks));
+  syncTabTitle();
+  checkReminders();
 }
 
 let historyCache = {};
@@ -763,6 +1004,7 @@ function onTick() {
       else if (tick % 30 === 0) renderAdminTable(); // refresh live durations
     }
   }
+  checkReminders();
   tick++;
 }
 onTick();
